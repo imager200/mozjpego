@@ -1,8 +1,8 @@
 package mozjpego
 
 /*
- #cgo CFLAGS: -I/opt/libjpeg-turbo/include/
- #cgo LDFLAGS: -L/opt/libjpeg-turbo/lib64 -lturbojpeg -ljpeg -Wl,-rpath=/opt/mozjpeg/lib64/
+ #cgo CFLAGS: -I/opt/mozjpeg/include/
+ #cgo LDFLAGS: -L/opt/mozjpeg/lib64 -lturbojpeg -ljpeg -Wl,-rpath=/opt/mozjpeg/lib64/
  #include <stdio.h>
 #include <jpeglib.h>
 #include <stdlib.h>
@@ -11,7 +11,12 @@ package mozjpego
 
 #define INPUT_BUF_SIZE  4096
 
-char* compress_JPEG_file(char *inbuffer, unsigned long insize, int quality) {
+struct compress_result {
+    long size;
+    unsigned char* data;
+} ;
+
+struct compress_result compress_JPEG_file(char *inbuffer, unsigned long insize, int quality, boolean progressive) {
   struct jpeg_compress_struct cinfo;
   struct jpeg_error_mgr jerr;
   cinfo.err = jpeg_std_error(&jerr);
@@ -49,7 +54,14 @@ char* compress_JPEG_file(char *inbuffer, unsigned long insize, int quality) {
   cinfo.image_height = dinfo.image_height;
   cinfo.raw_data_in = FALSE;
 
-  jpeg_set_quality(&cinfo, quality, TRUE);
+   if (!progressive) {
+      cinfo.num_scans = 0;
+      cinfo.scan_info = NULL;
+  } else {
+    jpeg_simple_progression(&cinfo);
+  }
+
+  jpeg_set_quality(&cinfo, quality, !progressive);
 
   jpeg_start_compress(&cinfo, TRUE);
 
@@ -68,58 +80,40 @@ char* compress_JPEG_file(char *inbuffer, unsigned long insize, int quality) {
 
     jpeg_destroy_decompress(&dinfo);
 
-  return outbuffer;
+	struct compress_result result = {outsize, outbuffer};
+
+  return result;
 }
 */
 import "C"
 import (
-	"fmt"
-	"os"
+	"bytes"
+	"image/jpeg"
 	"unsafe"
 )
 
-//cjpeg
 type Parameters struct {
 	Quality     uint8
 	Progressive bool
-	BaseLine    bool
 }
 
+//compress an image with the given parameters
+//calls MozJpeg underneath
 func Compress(imageBytes []byte, params Parameters) ([]byte, error) {
-
-	//image.Decode(r io.Reader)
-
-	fmt.Println("input: ", len(imageBytes))
-
-	result := C.compress_JPEG_file(C.CString(string(imageBytes)), C.ulong(len(imageBytes)), C.int(params.Quality))
-
-	//up := unsafe.Pointer(result)
-
-	fmt.Println("size1: ", unsafe.Sizeof(result))
-
-	//i := 0
-
-	/* 	for i < int(unsafe.Sizeof(result)) {
-		d := (*C.int)(unsafe.Pointer(result)) + unsafe.Sizeof(i)
-
-
-		i++
-	} */
-
-	res := []byte(C.GoString(result))
-
-	fmt.Println("size2: ", len(res))
-
-	os.TempDir()
-
-	for i, _ := range res {
-		//current := (*[]byte)(unsafe.Pointer(uintptr(res[i])))
-		fmt.Printf("%d\n", res[i])
-		fmt.Printf("%d\n", unsafe.Sizeof(&res[i]))
-		fmt.Printf("%d\n", unsafe.Alignof(&res[i]))
-		//fmt.Printf("%d\n", current)
-		//unsafe.Pointer(&res[.i])
+	//check image type
+	if _, err := jpeg.DecodeConfig(bytes.NewBuffer(imageBytes)); err != nil {
+		return nil, err
 	}
 
-	return []byte(C.GoString(result)), nil
+	progressive := 0
+
+	if params.Progressive {
+		progressive = 1
+	}
+
+	result := C.compress_JPEG_file(C.CString(string(imageBytes)), C.ulong(len(imageBytes)), C.int(params.Quality), C.boolean(progressive))
+
+	imageData := unsafe.Slice(result.data, result.size)
+
+	return *(*[]byte)(unsafe.Pointer(&imageData)), nil
 }
