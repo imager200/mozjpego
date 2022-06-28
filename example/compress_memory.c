@@ -3,10 +3,16 @@
 #include <stdlib.h>
 #include <setjmp.h>
 #include <math.h>
+#include <string.h>
 
 #define INPUT_BUF_SIZE  4096
 
-unsigned char* compress_JPEG_file(char *filename, int quality) {
+struct compress_result {
+    long size;
+    unsigned char* data;
+} ;
+
+struct compress_result compress_JPEG_file(char *filename, int quality, boolean progressive) {
   struct jpeg_compress_struct cinfo;
   struct jpeg_error_mgr jerr;
   FILE *input_file; 
@@ -36,13 +42,11 @@ unsigned char* compress_JPEG_file(char *filename, int quality) {
      size_t nbytes;
     do {
       inbuffer = (unsigned char *)realloc(inbuffer, insize + INPUT_BUF_SIZE);
-        printf("\nsize inbuffer: %ld %ld\n", sizeof(inbuffer[0]), insize);
       if (inbuffer == NULL) {
         fprintf(stderr, "memory allocation failure\n");
         exit(EXIT_FAILURE);
       }
       nbytes = fread(&inbuffer[insize], 1, INPUT_BUF_SIZE, input_file);
-       printf("\nread : %ld\n", nbytes);
       if (nbytes < INPUT_BUF_SIZE && ferror(input_file)) {
           fprintf(stderr, "can't read from %s\n", filename);
       }
@@ -73,7 +77,14 @@ unsigned char* compress_JPEG_file(char *filename, int quality) {
   cinfo.raw_data_in = FALSE;
   /* Step 3: set parameters for compression */
 
-  jpeg_set_quality(&cinfo, quality, TRUE);
+  if (!progressive) {
+      cinfo.num_scans = 0;
+      cinfo.scan_info = NULL;
+  } else {
+    jpeg_simple_progression(&cinfo);
+  }
+
+  jpeg_set_quality(&cinfo, quality, !progressive);
 
 
   jpeg_start_compress(&cinfo, TRUE);
@@ -99,24 +110,29 @@ unsigned char* compress_JPEG_file(char *filename, int quality) {
 
     jpeg_destroy_decompress(&dinfo);
 
-    printf("outsize: %ld", outsize);
+    struct compress_result result = {outsize, outbuffer};
 
-  return outbuffer;
+  return result;
 }
 
 int main(int argc, char **argv) {
-    if (argc < 4) {
-      fprintf(stderr, "usage: %s [src_file] [dest_file] [quality]\n", argv[0]);
+    if (argc < 5) {
+      fprintf(stderr, "usage: %s [src_file] [dest_file] [quality] [progressive]\n", argv[0]);
       exit(EXIT_FAILURE);
     }
 
     char* src_file_name = argv[1];
     char *dest_file_name = argv[2];
     char *quality = argv[3];
+    char *progressive = argv[4];
 
-    unsigned char* result = compress_JPEG_file(src_file_name, atoi(quality));
+    boolean is_progressive = FALSE;
 
-    printf("size of: %ld", sizeof(result));
+    if (strcmp(progressive, "true") == 0) {
+        is_progressive = TRUE;
+    }
+
+    struct compress_result result = compress_JPEG_file(src_file_name, atoi(quality), is_progressive);
 
     FILE *output = fopen(dest_file_name, "wb");
 
@@ -124,9 +140,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
     
-    for (int i = 0; i < sizeof(result); i++) {
-        fwrite(result, sizeof(result), result[i], output);
-    }
+    fwrite(result.data, 1, result.size, output);
 
     fclose(output);
     return 0;
