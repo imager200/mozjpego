@@ -17,9 +17,10 @@ void compress_JPEG_file(char *src_file_name, char* dst_file_name, int quality) {
   FILE *input_file;               
   cinfo.err = jpeg_std_error(&jerr);
   jpeg_create_compress(&cinfo);
-   cinfo.in_color_space = JCS_RGB; /* arbitrary guess */
-   jpeg_set_defaults(&cinfo);
 
+   cinfo.in_color_space = JCS_RGB;
+   
+   jpeg_set_defaults(&cinfo);
 
   if ((input_file = fopen(src_file_name, "rb")) == NULL) {
     fprintf(stderr, "can't open %s\n", src_file_name);
@@ -73,13 +74,14 @@ void compress_JPEG_file(char *src_file_name, char* dst_file_name, int quality) {
   /* Step 5: while (scan lines remain to be written) */
   /*           jpeg_write_scanlines(...); */
 
-  /* Here we use the library's state variable cinfo.next_scanline as the
+
+ JSAMPARRAY image_buffer = (*cinfo.mem->alloc_sarray) ((j_common_ptr) &cinfo, JPOOL_IMAGE, (JDIMENSION) (cinfo.image_width * cinfo.input_components), (JDIMENSION) 1);
+
+   /* Here we use the library's state variable cinfo.next_scanline as the
    * loop counter, so that we don't have to keep track ourselves.
    * To keep things simple, we pass one scanline per call; you can pass
    * more if you wish, though.
    */
-
- JSAMPARRAY image_buffer = (*cinfo.mem->alloc_sarray) ((j_common_ptr) &dinfo, JPOOL_IMAGE, (JDIMENSION) (cinfo.image_width * cinfo.input_components), (JDIMENSION) 1);
 
   while (cinfo.next_scanline < cinfo.image_height) {
     /* jpeg_write_scanlines expects an array of pointers to scanlines.
