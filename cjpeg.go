@@ -92,13 +92,13 @@ import (
 	"unsafe"
 )
 
+//MozJPEG parameters
 type Parameters struct {
-	Quality     uint8
-	Progressive bool
+	Quality     uint8 //compression quality (0..100; 5-95 is the most useful range)
+	Progressive bool  //whether to create a progressive JPEG file
 }
 
 //compress an image with the given parameters
-//calls MozJpeg underneath
 func Compress(imageBytes []byte, params Parameters) ([]byte, error) {
 	//check image type
 	if _, err := jpeg.DecodeConfig(bytes.NewBuffer(imageBytes)); err != nil {

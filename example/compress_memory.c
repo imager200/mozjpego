@@ -97,10 +97,8 @@ struct compress_result compress_JPEG_file(char *filename, int quality, boolean p
     }
 
     /* Step 6: Finish compression */
-
     jpeg_finish_compress(&cinfo);
     fclose(input_file);
-
     /* Step 7: release JPEG compression object */
 
     /* This is an important step since it will release a good deal of memory. */
